@@ -1,0 +1,155 @@
+data SEGMENT
+    MSG1 DB 10,13, 'Enter digits (0-9), then press Enter:$'
+    MSG2 DB 10,13, 'Entered digits: $'
+    MSG3 DB 10,13, 'Enter digit to search (0-9): $'
+    MSG4 DB 10,13, 'Digit found at index: $'
+    MSG5 DB 10,13, 'Digit NOT found.$'
+    INDEX_MSG DB 'Index: $'
+    STR DB 20 DUP(0)       
+data ENDS
+
+code SEGMENT
+ASSUME CS:code, DS:data
+
+START:
+    MOV AX, data
+    MOV DS, AX
+
+    ; Prompt input digits
+    LEA DX, MSG1
+    MOV AH, 09h
+    INT 21h
+                 
+    LEA DI, STR
+    MOV CX, 0         
+
+READ_LOOP:
+    MOV AH, 01h      
+    INT 21h
+    CMP AL, 0Dh      
+    JE INPUT_DONE
+    CMP AL, '0'
+    JB READ_LOOP      
+    CMP AL, '9'
+    JA READ_LOOP      
+
+    MOV [DI], AL     
+    INC DI
+    INC CX            
+    CMP CX, 20        
+    JE INPUT_DONE
+    JMP READ_LOOP
+
+INPUT_DONE:
+    ; Print entered digits
+    LEA DX, MSG2
+    MOV AH, 09h
+    INT 21h
+
+    MOV SI, 0
+    MOV BX, CX        ; save count in BX for later
+
+PRINT_LOOP:
+    CMP CX, 0
+    JE SEARCH_PROMPT
+
+    MOV DL, [STR + SI]
+    MOV AH, 02h
+    INT 21h
+    INC SI
+    DEC CX
+    JMP PRINT_LOOP
+
+SEARCH_PROMPT:
+    ; Prompt digit to search
+    LEA DX, MSG3
+    MOV AH, 09h
+    INT 21h
+
+    ; Read single digit for search
+    MOV AH, 01h
+    INT 21h
+    CMP AL, '0'
+    JB NOT_FOUND
+    CMP AL, '9'
+    JA NOT_FOUND
+
+    MOV BL, AL       ; digit to search
+    MOV CX, BX       ; count of digits to search in
+    MOV SI, 0        ; start index
+
+SEARCH_LOOP:
+    CMP CX, 0
+    JE NOT_FOUND
+
+    MOV AL, [STR + SI]
+    CMP AL, BL
+    JE FOUND
+
+    INC SI
+    DEC CX
+    JMP SEARCH_LOOP
+
+FOUND:
+    ; Print message "Digit found at index: "
+    LEA DX, MSG4
+    MOV AH, 09h
+    INT 21h
+
+    ; Print index as decimal number
+    ; SI = index (0-based)
+
+    ; Convert SI (max 20) to ASCII digit(s)
+    MOV AX, SI
+    CALL PRINT_DECIMAL
+
+    JMP DONE
+
+NOT_FOUND:
+    LEA DX, MSG5
+    MOV AH, 09h
+    INT 21h
+
+
+
+DONE:
+    MOV AH, 4Ch
+    INT 21h
+
+; --------------------------------------------
+; PRINT_DECIMAL: prints AX as decimal number
+; Supports max 2 digit number (0-99)
+; --------------------------------------------
+PRINT_DECIMAL PROC
+    PUSH AX
+    PUSH CX
+    PUSH DX
+
+    MOV CX, 0        ; digit count
+
+    MOV BX, 10
+
+    MOV DX, 0        ; clear DX for div
+
+DIV_LOOP:
+    DIV BX           ; divide AX by 10, quotient in AX, remainder in DX
+    PUSH DX          ; remainder digit on stack
+    INC CX
+    CMP AX, 0
+    JNE DIV_LOOP
+
+PRINT_LOOP2:
+    POP DX
+    ADD DL, '0'
+    MOV AH, 02h
+    INT 21h
+    LOOP PRINT_LOOP2
+
+    POP DX
+    POP CX
+    POP AX
+    RET
+PRINT_DECIMAL ENDP
+
+code ENDS
+END START
